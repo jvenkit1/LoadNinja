@@ -3,14 +3,17 @@ from flask import jsonify
 from flask import request
 from flask_pymongo import PyMongo
 import yaml
+import os
 
 app = Flask(__name__)
 with open(r'./config.yaml') as file:
   locationMappings = yaml.load(file, Loader=yaml.FullLoader)
 
+# app.config['MONGO_DBNAME'] = locationMappings["db"]["name"]
+# app.config['MONGO_URI'] = 'mongodb://' + locationMappings["db"]["url"] + ':' + str(locationMappings["db"]["port"]) + '/'+ locationMappings["db"]["name"]
 
-app.config['MONGO_DBNAME'] = locationMappings["db"]["name"]
-app.config['MONGO_URI'] = 'mongodb://' + locationMappings["db"]["url"] + ':' + str(locationMappings["db"]["port"]) + '/'+ locationMappings["db"]["name"]
+app.config['MONGO_DBNAME'] = os.environ["dbName"]
+app.config['MONGO_URI'] = 'mongodb://' + os.environ["dbUrl"] + ':' + str(os.environ["dbPort"]) + '/'+ os.environ["dbName"]
 
 mongo = PyMongo(app)
 
@@ -35,4 +38,7 @@ def add_star():
   return jsonify({'result' : output})
 
 if __name__ == '__main__':
-    app.run(host=locationMappings['summer']['url'], port=locationMappings['summer']['port'], debug=True)
+    host = os.environ['summerHost']
+    port = os.environ['summerPort']
+    app.run(host=host, port=port, debug=True)
+    # app.run(host=locationMappings['summer']['url'], port=locationMappings['summer']['port'], debug=True)

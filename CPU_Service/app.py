@@ -2,6 +2,7 @@ from flask import Flask
 from flask import jsonify
 from flask import request
 import yaml
+import os
 import hashlib
 
 app = Flask(__name__)
@@ -30,4 +31,6 @@ def generate_multiply_load():
   return jsonify({'result': x})
 
 if __name__ == '__main__':
-    app.run(host=locationMappings['hasher']['url'], port=locationMappings['hasher']['port'], debug=True)
+    host = os.environ['hasherHost']
+    port = os.environ['hasherPort']
+    app.run(host=host, port=port, debug=True)
