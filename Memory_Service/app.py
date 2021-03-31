@@ -15,7 +15,7 @@ mongo = PyMongo(app)
 @app.route('/constructHeavyDict', methods=['GET'])
 def construct_heavy_dict():
 	memoryFiller = {}
-	repeat = request.args['repeat']
+	repeat = int(request.args['repeat'])
 	for i in range(repeat):
 		memoryFiller[i] = 'vidit'*1024
 	return jsonify({'result' : "Created a huge dictionary"})

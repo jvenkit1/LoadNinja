@@ -23,7 +23,7 @@ letters = string.ascii_lowercase
 @app.route('/bulkRead', methods=['GET'])
 def get_all_stars():
 	star = mongo.db.stars
-	repeat = request.args['repeat']
+	repeat = int(request.args['repeat'])
 	for _ in range(repeat):
 		name = ''.join(random.choice(letters) for i in range(10))
 		rank = random.randrange(1000)
@@ -47,14 +47,14 @@ def write_name():
 @app.route('/bulkWrite', methods=['POST'])
 def add_star():
 	star = mongo.db.stars
-	repeat = request.args['repeat']
+	repeat = int(request.args['repeat'])
 	for _ in range(repeat):
 		name = ''.join(random.choice(letters) for i in range(10))
 		rank = random.randrange(1000)
 		star.update({"name": name}, {"$set": {'rank': rank}}, upsert = True)
 
 	star.remove()
-	return jsonify({'result' : 'Upserted ' + repeat + ' documents in DB and removed all of them'})
+	return jsonify({'result' : 'Upserted ' + str(repeat) + ' documents in DB and removed all of them'})
 
 if __name__ == '__main__':
 	host = os.environ['writerHost']

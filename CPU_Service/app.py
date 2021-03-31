@@ -12,7 +12,7 @@ with open(r'./config.yaml') as file:
 
 @app.route('/hashFile', methods=['GET'])
 def hash_file():
-	repeat = request.args['repeat']
+	repeat = int(request.args['repeat'])
 	for _ in range(repeat):
 		h = hashlib.sha512()
 		with open("./test.mp3", 'rb') as file:
@@ -26,7 +26,7 @@ def hash_file():
 
 @app.route('/generateLoad', methods=['GET'])
 def generate_multiply_load():
-	repeat = request.args['repeat']
+	repeat = int(request.args['repeat'])
 	for _ in range(repeat):
 		pr = 213123  # generates some load
 		x = pr * pr
