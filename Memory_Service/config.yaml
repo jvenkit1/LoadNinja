@@ -1,0 +1,13 @@
+hasher:
+  url: localhost
+  port: 10040
+summer:
+  url: localhost
+  port: 10041
+writer:
+  url: localhost
+  port: 10042
+db:
+  url: localhost
+  name: test
+  port: 27017
