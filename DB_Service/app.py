@@ -18,13 +18,13 @@ app.config['MONGO_DBNAME'] = os.environ["dbName"]
 app.config['MONGO_URI'] = 'mongodb://' + os.environ["dbUrl"] + ':' + str(os.environ["dbPort"]) + '/'+ os.environ["dbName"]
 
 mongo = PyMongo(app)
+letters = string.ascii_lowercase
 
 @app.route('/bulkRead', methods=['GET'])
 def get_all_stars():
 	star = mongo.db.stars
 	repeat = request.args['repeat']
 	for _ in range(repeat):
-		letters = string.ascii_lowercase
 		name = ''.join(random.choice(letters) for i in range(10))
 		rank = random.randrange(1000)
 		star.update({"name": name}, {"$set": {'rank': rank}}, upsert = True)
@@ -34,12 +34,21 @@ def get_all_stars():
 		output.append({'name' : s['name'], 'rank' : s['rank']})
 	return jsonify({'result' : output})
 
+
+@app.route('/_writeName', methods=['POST'])
+def write_name():
+	star = mongo.db.stars
+	name = ''.join(random.choice(letters) for i in range(10))
+	rank = random.randrange(1000)
+	star.update({"name": name}, {"$set": {'rank': rank}}, upsert = True)
+	return jsonify({'result' : 	star.find_one({"name": name})})
+
+
 @app.route('/bulkWrite', methods=['POST'])
 def add_star():
 	star = mongo.db.stars
 	repeat = request.args['repeat']
 	for _ in range(repeat):
-		letters = string.ascii_lowercase
 		name = ''.join(random.choice(letters) for i in range(10))
 		rank = random.randrange(1000)
 		star.update({"name": name}, {"$set": {'rank': rank}}, upsert = True)
