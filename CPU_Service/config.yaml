@@ -1,12 +1,12 @@
 hasher:
   url: localhost
-  port: 10040
-summer:
-  url: localhost
-  port: 10041
+  port: 3000
 writer:
   url: localhost
-  port: 10042
+  port: 3001
+summer:
+  url: localhost
+  port: 3002
 db:
   url: localhost
   name: test

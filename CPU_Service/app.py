@@ -34,6 +34,10 @@ def generate_multiply_load():
 	return jsonify({'result': x})
 
 if __name__ == '__main__':
-	host = os.environ['hasherHost']
-	port = os.environ['hasherPort']
+	host = "0.0.0.0"
+	port = 3000
+	if 'hasherHost' in os.environ:
+		host = os.environ['hasherHost']
+	if 'hasherPort' in os.environ:
+		port = os.environ['hasherPort']
 	app.run(host=host, port=port, debug=True)
