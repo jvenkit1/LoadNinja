@@ -1,0 +1,24 @@
+version: '2'
+services:
+    cpu:
+        image: cpu-service:0.0.1
+        ports:
+            - "3000:3000"
+    db:
+        image: db-service:0.0.1
+        ports:
+            - "3001:3001"
+        environment:
+            dbURL: mongo
+            dbPort: "27017"
+    memory:
+        image: memory-service:0.0.1
+        ports:
+            - "3002:3002"
+        environment:
+            writerHost: db
+            writerPort: "3001"
+    mongo:
+        image: mongo
+        ports:
+            - "27017:27017"
