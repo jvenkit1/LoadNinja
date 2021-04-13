@@ -33,7 +33,7 @@ app.config['MONGO_URI'] = 'mongodb://' + dbURL + ':' + str(dbPort) + '/'+ dbName
 mongo = PyMongo(app)
 letters = string.ascii_lowercase
 
-@app.route('/bulkRead', methods=['GET'])
+@app.route('/app/db/bulkRead', methods=['GET'])
 def get_all_stars():
 	star = mongo.db.stars
 	repeat = int(request.args['repeat'])
@@ -48,7 +48,7 @@ def get_all_stars():
 	return jsonify({'result' : output})
 
 
-@app.route('/_writeName', methods=['POST'])
+@app.route('/api/db/_writeName', methods=['POST'])
 def write_name():
 	star = mongo.db.stars
 	name = ''.join(random.choice(letters) for i in range(10))
@@ -57,7 +57,7 @@ def write_name():
 	return jsonify({'result' : 	''.join(star.find_one({"name": name}))})
 
 
-@app.route('/bulkWrite', methods=['POST'])
+@app.route('/api/db/bulkWrite', methods=['POST'])
 def add_star():
 	star = mongo.db.stars
 	repeat = int(request.args['repeat'])

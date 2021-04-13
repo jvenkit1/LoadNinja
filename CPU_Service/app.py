@@ -10,7 +10,7 @@ with open(r'./config.yaml') as file:
 	locationMappings = yaml.load(file, Loader=yaml.FullLoader)
 
 
-@app.route('/hashFile', methods=['GET'])
+@app.route('/api/cpu/hashFile', methods=['GET'])
 def hash_file():
 	repeat = int(request.args['repeat'])
 	for _ in range(repeat):
@@ -24,7 +24,7 @@ def hash_file():
 				h.update(chunk)
 	return jsonify({'hash' : h.hexdigest()})
 
-@app.route('/generateLoad', methods=['GET'])
+@app.route('/api/cpu/generateLoad', methods=['GET'])
 def generate_multiply_load():
 	repeat = int(request.args['repeat'])
 	for _ in range(repeat):

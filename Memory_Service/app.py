@@ -20,7 +20,7 @@ if 'writerPort' in os.environ:
 	writerPort = os.environ['writerPort']
 
 
-@app.route('/constructHeavyDict', methods=['GET'])
+@app.route('/api/memory/constructHeavyDict', methods=['GET'])
 def construct_heavy_dict():
 	memoryFiller = {}
 	repeat = int(request.args['repeat'])
@@ -28,7 +28,7 @@ def construct_heavy_dict():
 		memoryFiller[i] = 'vidit'*1024
 	return jsonify({'result' : "Created a huge dictionary"})
 
-@app.route('/dbWrite', methods=['POST'])
+@app.route('/api/memory/dbWrite', methods=['POST'])
 def db_write():
 	return requests.post('http://' + writerHost + ':' + writerPort + '/_writeName').content
  	
