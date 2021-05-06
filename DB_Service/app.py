@@ -6,13 +6,22 @@ import yaml
 import os
 import random
 import string
+from healthcheck import HealthCheck, EnvironmentDump
 
 app = Flask(__name__)
+health = HealthCheck()
+
 with open(r'./config.yaml') as file:
 	locationMappings = yaml.load(file, Loader=yaml.FullLoader)
 
 # app.config['MONGO_DBNAME'] = locationMappings["db"]["name"]
 # app.config['MONGO_URI'] = 'mongodb://' + locationMappings["db"]["url"] + ':' + str(locationMappings["db"]["port"]) + '/'+ locationMappings["db"]["name"]
+
+def is_running():
+	return True, "is running"
+
+health.add_check(is_running)
+
 
 dbName = "test"
 dbURL = "0.0.0.0"
@@ -77,5 +86,7 @@ if __name__ == '__main__':
 	if 'writerPort' in os.environ:
 		port = os.environ['writerPort']
 
+
+	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
 	app.run(host=host, port=port, debug=True)
 	# app.run(host=locationMappings['writer']['url'], port=locationMappings['writer']['port'], debug=True)

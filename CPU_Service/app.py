@@ -5,10 +5,21 @@ import yaml
 import os
 import hashlib
 
+from healthcheck import HealthCheck, EnvironmentDump
+
 app = Flask(__name__)
+health = HealthCheck()
+envdump = EnvironmentDump()
+
+
 with open(r'./config.yaml') as file:
 	locationMappings = yaml.load(file, Loader=yaml.FullLoader)
 
+
+def is_running():
+	return True, "is running"
+
+health.add_check(is_running)
 
 @app.route('/api/cpu/hashFile', methods=['GET'])
 def hash_file():
@@ -40,4 +51,5 @@ if __name__ == '__main__':
 		host = os.environ['hasherHost']
 	if 'hasherPort' in os.environ:
 		port = os.environ['hasherPort']
+	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
 	app.run(host=host, port=port, debug=True)

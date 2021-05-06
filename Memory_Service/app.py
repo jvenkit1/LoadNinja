@@ -5,10 +5,19 @@ from flask_pymongo import PyMongo
 import yaml
 import os
 import requests
+from healthcheck import HealthCheck, EnvironmentDump
+
 
 app = Flask(__name__)
+health = HealthCheck()
 with open(r'./config.yaml') as file:
 	locationMappings = yaml.load(file, Loader=yaml.FullLoader)
+
+
+def is_running():
+	return True, "is running"
+
+health.add_check(is_running)
 
 writerHost = "0.0.0.0"
 writerPort = "3001"
@@ -41,5 +50,6 @@ if __name__ == '__main__':
 	if 'summerPort' in os.environ:
 		port = os.environ['summerPort']
 
+	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
 	app.run(host=host, port=port, debug=True)
 	# app.run(host=locationMappings['summer']['url'], port=locationMappings['summer']['port'], debug=True)
