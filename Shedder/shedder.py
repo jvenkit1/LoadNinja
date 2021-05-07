@@ -6,6 +6,7 @@ import json
 import os
 
 import requests
+from requests.exceptions import RequestException
 import redis
 
 from kubernetes import client, config
@@ -30,16 +31,17 @@ def is_running():
 health.add_check(is_running)
 
 # Get a list of all the pod IPs periodically or whenenver a new pod appears it calls an api
-@app.route('/api/updatepodslocation', methods=['GET'])
-def updatePodsLocation():
+@app.route('/api/fetachallpods', methods=['GET'])
+def fetchAllPods():
     r = redis.Redis(host='localhost', port=6379, db=0)
     r.set('0.0.0.0:3000', json.dumps({
         "isActive": True, 
         "cpu": [],
         "memory": [],
-        "latency": []
-    }))
-    return jsonify({"written":True})
+        "latency": [],
+        "result": []
+    }), ex=10)
+    return jsonify({ "written" : list(r.scan_iter("*")) })
     # contexts, active_context = config.list_kube_config_contexts()
     # if not contexts:
     #     print("Cannot find any context in kube-config file.")
@@ -67,30 +69,59 @@ def updatePodsLocation():
     #           (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
 
 
+@app.route('/api/updatepods', methods=['GET'])
+def updatePodsLocation():
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    r.set('0.0.0.0:3000', json.dumps({
+        "isActive": True, 
+        "cpu": [],
+        "memory": [],
+        "latency": [],
+        "result": []
+    }), ex=10)
+    return jsonify({ "written" : list(r.scan_iter("*")) })
+
 
 # Fetch all the IPs and call healthcheck on them to recieve aliveness, CPU, Memory
 @app.route('/api/healthchecks', methods=['GET'])
 def getHealthChecks():
     r = redis.Redis(host='localhost', port=6379, db=0)
     for key in r.scan_iter("*"):
-        usageUpdate = requests.get("http://" + key.decode("utf-8")  + '/api/cpu/generateLoad?repeat=10').content
-        print(json.loads(usageUpdate))
+        ipAddress = key.decode("utf-8")
+        pastUsage = json.loads(r.get(ipAddress))
+        print("ipAddressFetch", ipAddress, pastUsage)
 
+        try:
+            usageUpdateResponse = requests.get("http://" + ipAddress  + '/api/cpu/generateLoad?repeat=10', timeout=1).content        
+            usageUpdate = dict(json.loads(usageUpdateResponse))
+            print("New statistics", usageUpdate)
 
+        except RequestException as e:
+            print("Request didnt work, deleting the node from memory")
+            r.delete(key, json.dumps(pastUsage))
+            return jsonify( {"updatedIps": list(r.scan_iter("*")) })
 
-    return jsonify( {"written":json.loads(r.get('0.0.0.0:3000')) })
-    
+        for metric in usageUpdate:
+                if metric in pastUsage and len(pastUsage[metric]) > 10:
+                    pastUsage[metric].pop(0)
+                    pastUsage[metric].append(usageUpdate[metric])
+                elif metric in pastUsage:
+                    pastUsage[metric].append(usageUpdate[metric])
+        print("Updated past object", pastUsage)
+            
+        r.set(key, json.dumps(pastUsage), ex=10)
 
-# Store which services are alive as well as the running average in local memory (move to redis) 
-
+    return jsonify( {"updatedIps": list(r.scan_iter("*")) })
 
 # When a new Request coming in
 # Different categories of users * Different categories of APIs
 # Check the threshold stored in redis, if above a certain threshold, respond with backoff 
 # If below the threshold, forward the request to the server using kubernetes load balancer
-# 
-# 
-# 
+# Fetch all the IPs and call healthcheck on them to recieve aliveness, CPU, Memory
+@app.route('/api/cpu/<requestType>', methods=['GET'])
+def requestForwarder(requestType):
+    print(requestType)
+    return jsonify( {"requestType": requestType })
 
 
 
