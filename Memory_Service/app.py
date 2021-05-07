@@ -4,6 +4,7 @@ from flask import request
 from flask_pymongo import PyMongo
 import yaml
 import os
+import psutil
 import requests
 from healthcheck import HealthCheck, EnvironmentDump
 
@@ -29,6 +30,12 @@ if 'writerPort' in os.environ:
 	writerPort = os.environ['writerPort']
 
 
+@app.route('/metrics', methods=['GET'])
+def get_metrics():
+	used_mem = psutil.virtual_memory().percent
+	used_cpu = psutil.cpu_percent()
+	return jsonify({'memory': used_mem, 'cpu': used_cpu})
+
 @app.route('/api/memory/constructHeavyDict', methods=['GET'])
 def construct_heavy_dict():
 	memoryFiller = {}
@@ -51,5 +58,5 @@ if __name__ == '__main__':
 		port = os.environ['summerPort']
 
 	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
-	app.run(host=host, port=port, debug=True)
+	app.run(host=host, port=port, debug=True, threaded=True)
 	# app.run(host=locationMappings['summer']['url'], port=locationMappings['summer']['port'], debug=True)

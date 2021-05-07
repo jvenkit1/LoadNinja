@@ -2,6 +2,7 @@ from flask import Flask
 from flask import jsonify
 from flask import request
 import yaml
+import psutil
 import os
 import hashlib
 
@@ -20,6 +21,12 @@ def is_running():
 	return True, "is running"
 
 health.add_check(is_running)
+
+@app.route('/metrics', methods=['GET'])
+def get_metrics():
+	used_mem = psutil.virtual_memory().percent
+	used_cpu = psutil.cpu_percent()
+	return jsonify({'memory': used_mem, 'cpu': used_cpu})
 
 @app.route('/api/cpu/hashFile', methods=['GET'])
 def hash_file():
@@ -52,4 +59,4 @@ if __name__ == '__main__':
 	if 'hasherPort' in os.environ:
 		port = os.environ['hasherPort']
 	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
-	app.run(host=host, port=port, debug=True)
+	app.run(host=host, port=port, debug=True, threaded=True)
