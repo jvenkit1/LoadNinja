@@ -5,6 +5,7 @@ from flask_pymongo import PyMongo
 import yaml
 import os
 import random
+import psutil
 import string
 from healthcheck import HealthCheck, EnvironmentDump
 
@@ -41,6 +42,12 @@ app.config['MONGO_URI'] = 'mongodb://' + dbURL + ':' + str(dbPort) + '/'+ dbName
 
 mongo = PyMongo(app)
 letters = string.ascii_lowercase
+
+@app.route('/metrics', methods=['GET'])
+def get_metrics():
+	used_mem = psutil.virtual_memory().percent
+	used_cpu = psutil.cpu_percent()
+	return jsonify({'memory': used_mem, 'cpu': used_cpu})
 
 @app.route('/app/db/bulkRead', methods=['GET'])
 def get_all_stars():
@@ -88,5 +95,5 @@ if __name__ == '__main__':
 
 
 	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
-	app.run(host=host, port=port, debug=True)
+	app.run(host=host, port=port, debug=True, threaded=True)
 	# app.run(host=locationMappings['writer']['url'], port=locationMappings['writer']['port'], debug=True)
