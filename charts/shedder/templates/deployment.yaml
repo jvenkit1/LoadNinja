@@ -1,30 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "cpu-service.fullname" . }}
+  name: {{ include "shedder.fullname" . }}
   labels:
-    {{- include "cpu-service.labels" . | nindent 4 }}
+    {{- include "shedder.labels" . | nindent 4 }}
 spec:
-{{- if not .Values.autoscaling.enabled }}
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-{{- end }}
+  {{- end }}
   selector:
     matchLabels:
-      {{- include "cpu-service.selectorLabels" . | nindent 6 }}
+      {{- include "shedder.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-    {{- with .Values.podAnnotations }}
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
+      {{- end }}
       labels:
-        {{- include "cpu-service.selectorLabels" . | nindent 8 }}
+        {{- include "shedder.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "cpu-service.serviceAccountName" . }}
+      serviceAccountName: {{ include "shedder.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -33,17 +33,27 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: redisHost
+              value: "redis-master.cpu.svc"
+            - name: redisPort
+              value: "6379"
+            - name: redisPassword
+              valueFrom:
+                secretKeyRef:
+                  name: redis
+                  key: redis-password
           ports:
             - name: http
               containerPort: {{.Values.image.containerPort}}
               protocol: TCP
           # livenessProbe:
           #   httpGet:
-          #     path: /health
+          #     path: /
           #     port: http
           # readinessProbe:
           #   httpGet:
-          #     path: /health
+          #     path: /
           #     port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

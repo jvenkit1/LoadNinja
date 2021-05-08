@@ -1,19 +1,15 @@
-# Default values for memory-service.
+# Default values for shedder.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
 replicaCount: 1
 
 image:
-  repository: gcr.io/loadninja/memory-service
-  pullPolicy: IfNotPresent
+  repository: gcr.io/loadninja/shedder
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: 0.0.1
-  containerPort: 3002
-
-env:
-  writerHost: db.default.svc
-  writerPort: 3001
+  tag: "0.0.1"
+  containerPort: 3004
 
 imagePullSecrets: []
 nameOverride: ""
@@ -43,7 +39,7 @@ securityContext: {}
 
 service:
   type: ClusterIP
-  port: 3002
+  port: 3004
 
 ingress:
   enabled: true
@@ -51,9 +47,9 @@ ingress:
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   hosts:
-    - host: memory-service
-      paths: 
-        - /api/memory/
+    - host: shedder
+      paths:
+        - "/api/shed/"
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -65,11 +61,11 @@ resources:
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
   limits:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 300m
+    memory: 500Mi
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 300m
+    memory: 500Mi
 
 autoscaling:
   enabled: false
