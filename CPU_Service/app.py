@@ -28,7 +28,7 @@ def get_metrics():
 	used_cpu = psutil.cpu_percent()
 	return jsonify({'memory': used_mem, 'cpu': used_cpu})
 
-@app.route('/api/cpu/hashFile', methods=['GET'])
+@app.route('/api/_cpu/hashFile', methods=['GET'])
 def hash_file():
 	repeat = int(request.args['repeat'])
 	for _ in range(repeat):
@@ -42,7 +42,7 @@ def hash_file():
 				h.update(chunk)
 	return jsonify({'hash' : h.hexdigest()})
 
-@app.route('/api/cpu/generateLoad', methods=['GET'])
+@app.route('/api/_cpu/generateLoad', methods=['GET'])
 def generate_multiply_load():
 	repeat = int(request.args['repeat'])
 	for _ in range(repeat):

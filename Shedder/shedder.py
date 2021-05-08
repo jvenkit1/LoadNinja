@@ -27,8 +27,10 @@ redisPort = 6379
 redisPassword = ''
 
 SLIDING_WINDOW_SIZE = 10
-SERVICE_PORT = ":3000"
+SHEDDER_PORT = 3004
+SERVICE_PORT = 3000
 SERVICE_TYPE = "cpu"
+SERVICE_HOST = "0.0.0.0"
 
 
 def is_running():
@@ -45,23 +47,23 @@ def createPodsList():
     if not contexts:
         print("Cannot find any context in kube-config file.")
         return
-    print("Context", contexts, "Active context", active_context)
+    # print("Context", contexts, "Active context", active_context)
 
     contexts = [context['name'] for context in contexts]
-    print("Context", contexts)
+    # print("Context", contexts)
 
     active_index = contexts.index(active_context['name'])
-    print("Active Index", active_index)
+    # print("Active Index", active_index)
 
     cluster1, first_index = pick(contexts, title="Pick the first context",default_index=active_index)
     client1 = client.CoreV1Api(api_client=config.new_client_from_config(context=cluster1))
 
     print("\nList of pods on %s:" % cluster1)
-    for i in client1.list_namespaced_pod(SERVICE_TYPE, label_selector = SERVICE_TYPE).items:
+    for i in client1.list_namespaced_pod(SERVICE_TYPE).items:
         print("%s\t%s\t%s" %
               (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
-        r.set(SERVICE_TYPE + '/' + i.status.pod_ip + SERVICE_PORT, json.dumps({
-            "isActive": True, 
+        r.set(SERVICE_TYPE + '/' + i.status.pod_ip + ":" + str(SERVICE_PORT), json.dumps({
+            # "isActive": True, 
             "cpu": [],
             "memory": [],
             "latency": [],
@@ -78,8 +80,8 @@ def updatePodsList():
     r = redis.Redis(host=redisHost, port=redisPort, password=redisPassword, db=0)
     data = request.get_json()
     ipAddress = data["ip"]
-    r.set(SERVICE_TYPE + '/' + ipAddress + SERVICE_PORT, json.dumps({
-        "isActive": True, 
+    r.set(SERVICE_TYPE + '/' + ipAddress + ":" + str(SERVICE_PORT), json.dumps({
+        # "isActive": True, 
         "cpu": [],
         "memory": [],
         "latency": [],
@@ -158,6 +160,7 @@ def getClusterBackoff(userType, requestType):
         
         for key in pastUsage:
             # Calculating the average of the values, if no values exist return 0
+            print(pastUsage[key], key)
             averageMetric = sum(pastUsage[key])/len(pastUsage[key]) if len(pastUsage[key]) > 0 else 0
 
             if key not in backoff.BACKOFF_CONFIG[userType][requestType]:
@@ -176,11 +179,20 @@ def getClusterBackoff(userType, requestType):
     return backoffValue
 
 
+
+# Sends a proxy request to the actual server
 def _proxy(*args, **kwargs):
     # https://flask.palletsprojects.com/en/1.1.x/api/#flask.Request
+
+    print("Path - {} \n FullPath - {}\n URL - {}\n BaseURL - {}\n ScriptRoot - {}\n URLRoot-{}\n".format(request.path, request.full_path, request.url, request.base_url, request.script_root, request.url_root))
+
+    url = "http://" + SERVICE_HOST + ":" + str(SERVICE_PORT) + request.full_path.replace(SERVICE_TYPE, "_" + SERVICE_TYPE)
+    print("Request URL - ", request.url.replace(SERVICE_TYPE, "_" + SERVICE_TYPE).replace(str(SHEDDER_PORT), str(SERVICE_PORT)), url)
+
     resp = requests.request(
         method=request.method,
-        url=request.url.replace(request.host_url, 'new-domain.com'),
+        url = url,
+        # url=request.url.replace(SERVICE_TYPE, "_" + SERVICE_TYPE).replace(str(SHEDDER_PORT), str(SERVICE_PORT)),
         headers={key: value for (key, value) in request.headers if key != 'Host'},
         data=request.get_data(),
         cookies=request.cookies,
@@ -210,7 +222,7 @@ def requestForwarder(requestType):
 
 if __name__ == '__main__':
 	host = "0.0.0.0"
-	port = 3004
+	port = SHEDDER_PORT
 	if 'shedderHost' in os.environ:
 		host = os.environ['shedderHost']
 	if 'shedderPort' in os.environ:
@@ -222,8 +234,14 @@ if __name__ == '__main__':
 	if 'redisPort' in os.environ:
 		redisPort = os.environ['redisPort']
 	if 'redisPassword' in os.environ:
-		redisPassword = os.environ['redisPassword']
+		redisPassword = os.environ['redisPassword'] 
 
+	if 'servicePort' in os.environ:
+		SERVICE_PORT = os.environ['servicePort']
+	if 'serviceType' in os.environ:
+		SERVICE_TYPE = os.environ['serviceType']
+	if 'serviceHost' in os.environ:
+		SERVICE_HOST = os.environ['serviceHost']
 
 	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
 	app.run(host=host, port=port, debug=True)
