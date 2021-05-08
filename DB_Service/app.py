@@ -8,8 +8,10 @@ import random
 import psutil
 import string
 from healthcheck import HealthCheck, EnvironmentDump
+from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
 health = HealthCheck()
 
 with open(r'./config.yaml') as file:
