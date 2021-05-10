@@ -5,28 +5,41 @@ from timeit import default_timer
 import time
 from collections import defaultdict
 import random
+import pickle
+
 
 START_TIME = default_timer()
 NUM_REQUESTS = 50
 
-OPERATIONS = {i: [] for i in range(NUM_REQUESTS)}
+OPERATIONS = {}
 
 
-def fetch(session, csv, tries):
+def fetch(session, csv, userChoice, requestChoice, tries):
     base_url = "http://0.0.0.0:3004/api/cpu/hashFile?repeat=30"
-    with session.get(base_url, headers = {"user-type": "user-free", "request-type": "priority-low"}) as response:
+    with session.get(base_url, headers = {"user-type": userChoice, "request-type": requestChoice}) as response:
         data = response.text
         retryingFlag = 0
         if response.status_code == 429:
-            print("Backing off request number ", csv, " for ", int(response.headers["Retry-After"]), " retry number ", tries + 1)
+            # sleepTime = random.randint(0, 
+            #     int(min(
+            #         int(50 + random.randint(0, 10)), 
+            #         int((int(response.headers["Retry-After"]) * (2**(tries-1))) + random.randint(0, 10))
+            #     ))
+            # )
+            temp = int(min(
+                    int(50 + random.randint(0, 10)), 
+                    int((int(response.headers["Retry-After"]) * (2**(tries-1))) + random.randint(0, 10))
+                ))
+            sleepTime = temp / (2 + random.randint(0, int(temp/2)))
+            print("Backing off request number ", csv, " for ", sleepTime, " retry number ", tries + 1)
             retryingFlag = 1
-            OPERATIONS[csv].append("BACKOFF" + str(tries))
-            time.sleep((int(response.headers["Retry-After"]) * (2**(tries-1))) + random.randint(0, 10))
-            data = fetch(session, csv, tries + 1)
+            OPERATIONS[str(csv) + '/' + userChoice + '/' + requestChoice].append({"BACKOFF": default_timer() - START_TIME})
+            time.sleep(sleepTime)
+            data = fetch(session, csv, userChoice, requestChoice, tries + 1)
         elif response.status_code != 200:
             print("FAILURE::{0} {1}".format(base_url, response.status_code))
         else:
-            OPERATIONS[csv].append("SERVED" + str(tries))
+            OPERATIONS[str(csv) + '/' + userChoice + '/' + requestChoice].append({"SERVED": default_timer() - START_TIME})
 
         if not retryingFlag:
             elapsed = default_timer() - START_TIME
@@ -41,14 +54,13 @@ async def get_data_asynchronous():
             # Set any session parameters here before calling `fetch`
             loop = asyncio.get_event_loop()
             START_TIME = default_timer()
-            tasks = [
-                loop.run_in_executor(
-                    executor,
-                    fetch,
-                    *(session, csv, 0) # Allows us to pass in multiple arguments to `fetch`
-                )
-                for csv in range(NUM_REQUESTS)
-            ]
+            tasks = []
+            for csv in range(NUM_REQUESTS):
+                userChoice = random.choice(["user-free", "user-paid"])
+                requestChoice = random.choice(["priority-low", "priority-medium", "priority-high"])
+                OPERATIONS[str(csv) + '/' + userChoice + '/' + requestChoice] = []
+                tasks.append(loop.run_in_executor(executor, fetch, *(session, csv, userChoice, requestChoice, 0)))
+
             for response in await asyncio.gather(*tasks):
                 pass
 
@@ -56,6 +68,8 @@ def main():
     loop = asyncio.get_event_loop()
     future = asyncio.ensure_future(get_data_asynchronous())
     loop.run_until_complete(future)
-    print(OPERATIONS)
+    f = open("base+jitter+inverse.pkl","wb")
+    pickle.dump(OPERATIONS, f)
+    f.close()
 
 main()
