@@ -1,0 +1,12 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: cpu-cpu-service
+  labels:
+    app: cpu-cpu-service
+spec:
+  selector:
+    app: cpu-cpu-service
+  ports:
+  - name: cpu-cpu-service
+    port: 3000

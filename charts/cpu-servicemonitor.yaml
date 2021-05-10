@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cpu-cpu-service
+  annotations: 
+    meta.helm.sh/release-name: prometheus
+    meta.helm.sh/release-namespace: monitoring
+  labels:
+    app: cpu-cpu-service
+    app.kubernetes.io/instance: prometheus
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    app.kubernetes.io/version: "15.4.4"
+    k8s-apps: cpu-cpu-service
+    chart: kube-prometheus-stack-15.4.4
+    heritage: Helm
+    release: prometheus
+spec:
+  jobLabel: k8s-app
+  selector:
+    matchLabels:
+      app: cpu-cpu-service
+  namespaceSelector:
+    any: true
+  endpoints:
+  - port: http
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    path: "/metrics"
+    interval: 1s

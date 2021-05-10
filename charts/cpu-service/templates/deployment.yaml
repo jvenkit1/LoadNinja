@@ -33,6 +33,15 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: shedderHost
+              value: "{{.Values.env.shedderHost}}"
+            - name: shedderPort
+              value: "{{.Values.env.shedderPort}}"
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "apt-get update && apt-get -y install curl && a=`hostname -I | sed 's/ //g'` && curl http://$a:3000/api/_cpu/updateIP"]
           ports:
             - name: http
               containerPort: {{.Values.image.containerPort}}

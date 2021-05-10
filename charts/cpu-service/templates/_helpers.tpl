@@ -35,6 +35,8 @@ Common labels
 */}}
 {{- define "cpu-service.labels" -}}
 helm.sh/chart: {{ include "cpu-service.chart" . }}
+app: cpu-cpu-service
+k8s-app: cpu-cpu-service
 {{ include "cpu-service.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
@@ -48,6 +50,8 @@ Selector labels
 {{- define "cpu-service.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "cpu-service.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app: cpu-cpu-service
+k8s-app: cpu-cpu-service
 {{- end }}
 
 {{/*

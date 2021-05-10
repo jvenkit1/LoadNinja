@@ -28,6 +28,12 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
+        - name: cronjob
+          image: alpine
+          args:
+          - /bin/sh
+          - -c
+          - apk update && apk add curl && a=`hostname -i | sed 's/ //g'` && while true; do curl http://$a:3004/api/shed/healthchecks; sleep 3; done
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -35,14 +41,28 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: redisHost
-              value: "redis-master.cpu.svc"
+              value: "{{.Values.env.redisHost}}"
             - name: redisPort
-              value: "6379"
+              value: "{{.Values.env.redisPort}}"
+            - name: serviceType
+              value: "{{.Values.env.serviceType}}"
+            - name: servicePort
+              value: "{{.Values.env.servicePort}} "
+            - name: serviceHost
+              value: "{{.Values.env.serviceHost}}"
+            - name: labelSelector
+              value: "{{.Values.env.labelSelector}}"
+            - name: PYTHONUNBUFFERED
+              value: "1"
             - name: redisPassword
               valueFrom:
                 secretKeyRef:
                   name: redis
                   key: redis-password
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "apt-get update && apt-get -y install curl && a=`hostname -I | sed 's/ //g'` && curl http://$a:3004/api/shed/createpodslist"]
           ports:
             - name: http
               containerPort: {{.Values.image.containerPort}}

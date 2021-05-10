@@ -11,6 +11,7 @@ image:
   tag: 0.0.1
   containerPort: 3000
 
+namespace: cpu
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -49,7 +50,7 @@ ingress:
   hosts:
     - host: cpu-service
       paths:
-        - "/api/cpu/"
+        - "/api/_cpu/"
 
   tls: []
   #  - secretName: chart-example-tls
@@ -67,6 +68,10 @@ resources:
   requests:
     cpu: 100m
     memory: 128Mi
+
+env:
+  shedderPort: "3004"
+  shedderHost: "cpu-shedder.cpu.svc"
 
 autoscaling:
   enabled: false

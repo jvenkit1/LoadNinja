@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: prometheus-cpu
+spec:
+  serviceAccountName: prometheus-kube-prometheus-prometheus
+  serviceMonitorSelector:
+    matchLabels:
+      k8s-apps: cpu-cpu-service
+  resources:
+    requests:
+      memory: 400Mi
+  enableAdminAPI: false
