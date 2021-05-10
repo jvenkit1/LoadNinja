@@ -13,4 +13,4 @@ RUN pip3 install -r requirements.txt
 COPY . .
 
 # Run the following command
-CMD [ "python3", "shedder.py"]
+CMD [ "python3", "-u", "shedder.py"]

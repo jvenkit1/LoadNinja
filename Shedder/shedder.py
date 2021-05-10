@@ -5,6 +5,8 @@ from flask import Response
 import yaml
 import json
 import os
+import socket
+import sys
 
 import requests
 from requests.exceptions import RequestException
@@ -32,6 +34,7 @@ SLIDING_WINDOW_SIZE = 10
 SHEDDER_PORT = 3004
 SERVICE_PORT = 3000
 SERVICE_TYPE = "cpu"
+LABEL_SELECTOR = "cpu-cpu-service"
 SERVICE_HOST = "0.0.0.0"
 
 
@@ -45,23 +48,25 @@ health.add_check(is_running)
 @app.route('/api/shed/createpodslist', methods=['GET'])
 def createPodsList():
     r = redis.Redis(host=redisHost, port=redisPort, password=redisPassword, db=0)
-    contexts, active_context = config.list_kube_config_contexts()
-    if not contexts:
-        print("Cannot find any context in kube-config file.")
-        return
-    # print("Context", contexts, "Active context", active_context)
+    # contexts, active_context = config.list_kube_config_contexts()
+    # if not contexts:
+    #     print("Cannot find any context in kube-config file.")
+    #     return
+    # # print("Context", contexts, "Active context", active_context)
 
-    contexts = [context['name'] for context in contexts]
-    # print("Context", contexts)
+    # contexts = [context['name'] for context in contexts]
+    # # print("Context", contexts)
 
-    active_index = contexts.index(active_context['name'])
-    # print("Active Index", active_index)
+    # active_index = contexts.index(active_context['name'])
+    # # print("Active Index", active_index)
 
-    cluster1, first_index = pick(contexts, title="Pick the first context",default_index=active_index)
-    client1 = client.CoreV1Api(api_client=config.new_client_from_config(context=cluster1))
+    # cluster1, first_index = pick(contexts, title="Pick the first context",default_index=active_index)
+    # client1 = client.CoreV1Api(api_client=config.new_client_from_config(context=cluster1))
 
-    print("\nList of pods on %s:" % cluster1)
-    for i in client1.list_namespaced_pod(SERVICE_TYPE).items:
+    config.load_incluster_config()
+    client1 = client.CoreV1Api()
+
+    for i in client1.list_namespaced_pod(SERVICE_TYPE, label_selector = "app="+LABEL_SELECTOR).items:
         print("%s\t%s\t%s" %
               (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
         r.set(SERVICE_TYPE + '/' + i.status.pod_ip + ":" + str(SERVICE_PORT), json.dumps({
@@ -70,7 +75,7 @@ def createPodsList():
             "memory": [],
             "latency": [],
             "result": []
-        }))
+        }), nx=True)
     keyList = [ key.decode('UTF-8') for key in r.scan_iter(SERVICE_TYPE + '/' + "*") ]
     return jsonify({ "written" : keyList })
 
@@ -80,15 +85,18 @@ def createPodsList():
 @app.route('/api/shed/updatepodslist', methods=['POST'])
 def updatePodsList():
     r = redis.Redis(host=redisHost, port=redisPort, password=redisPassword, db=0)
-    data = request.get_json()
+    # print(request.form)
+    data = request.form
+    # data = json.loads(data)
     ipAddress = data["ip"]
+    # print(ipAddress)
     r.set(SERVICE_TYPE + '/' + ipAddress + ":" + str(SERVICE_PORT), json.dumps({
         # "isActive": True, 
         "cpu": [],
         "memory": [],
         "latency": [],
         "result": []
-    }))
+    }), nx=True)
     keyList = [ key.decode('UTF-8') for key in r.scan_iter(SERVICE_TYPE + '/' + "*") ]
     return jsonify({ "written" :  keyList})
 
@@ -105,6 +113,21 @@ def deletePodsList():
 
 
 
+@app.route('/api/shed/getpodslist', methods=['GET'])
+def getPodsList():
+    r = redis.Redis(host=redisHost, port=redisPort, password=redisPassword, db=0)
+    podsInformation = []
+    for key in r.scan_iter("*"):
+        # Key is returned in bytes, converting it into a string
+        ipAddress = key.decode("utf-8")
+        # Gets the value stored in redis for the particular key, converts it into a JSON object
+        pastUsage = json.loads(r.get(ipAddress))
+        podsInformation.append({ipAddress: pastUsage})
+        print("Pods Information", ipAddress, pastUsage)
+
+    return jsonify({ "existing" :  podsInformation})
+
+
 # Fetch all the IPs from Redis and call healthcheck on them to recieve aliveness, CPU, Memory
 @app.route('/api/shed/healthchecks', methods=['GET'])
 def getHealthChecks():
@@ -115,11 +138,12 @@ def getHealthChecks():
         ipAddress = key.decode("utf-8")
         # Gets the value stored in redis for the particular key, converts it into a JSON object
         pastUsage = json.loads(r.get(ipAddress))
-        print("ipAddressFetch", ipAddress[len(SERVICE_TYPE + '/'):], pastUsage)
+        print("ipAddressFetch", ipAddress[len(SERVICE_TYPE + '/'):], pastUsage, file=sys.stdout)
 
         try:
             # Remove REDIS_PREFIX from key, send request to the resultant IP to fetch the health of the server
-            endPoint = "http://" + ipAddress[len(SERVICE_TYPE + '/'):]  + '/metrics'
+            endPoint = "http://" + ipAddress[len(SERVICE_TYPE + '/'):]  + '/internal/metrics'
+            endPoint = endPoint.replace(" ", "")
             print("Reaching out to " + endPoint)
             usageUpdateResponse = requests.get(endPoint, timeout=1).content
             print("Metadata", usageUpdateResponse)
@@ -132,13 +156,13 @@ def getHealthChecks():
                     pastUsage[metric].append(usageUpdate[metric])
                 elif metric in pastUsage:
                     pastUsage[metric].append(usageUpdate[metric])
-            print("Updated past object", pastUsage)
+            print("Updated past object", pastUsage, file=sys.stdout)
                 
             r.set(key, json.dumps(pastUsage))
 
         except RequestException as e:
             # If the request gives an error, delete key from Redis as the server is unresponsive
-            print("Request didnt work, deleting the node from memory:", e)
+            print("Request didnt work, deleting the node from memory:", e, file=sys.stdout)
             r.delete(key, json.dumps(pastUsage))
 
     keyList = [ key.decode('UTF-8') for key in r.scan_iter(SERVICE_TYPE + '/' + "*") ]
@@ -162,7 +186,7 @@ def getClusterBackoff(userType, requestType):
         
         for key in pastUsage:
             # Calculating the average of the values, if no values exist return 0
-            print(pastUsage[key], key)
+            # print(pastUsage[key], key)
             averageMetric = sum(pastUsage[key])/len(pastUsage[key]) if len(pastUsage[key]) > 0 else 0
 
             if key not in backoff.BACKOFF_CONFIG[userType][requestType]:
@@ -189,11 +213,11 @@ def _proxy(*args, **kwargs):
     print("Path - {} \n FullPath - {}\n URL - {}\n BaseURL - {}\n ScriptRoot - {}\n URLRoot-{}\n".format(request.path, request.full_path, request.url, request.base_url, request.script_root, request.url_root))
 
     url = "http://" + SERVICE_HOST + ":" + str(SERVICE_PORT) + request.full_path.replace(SERVICE_TYPE, "_" + SERVICE_TYPE)
-    print("Request URL - ", request.url.replace(SERVICE_TYPE, "_" + SERVICE_TYPE).replace(str(SHEDDER_PORT), str(SERVICE_PORT)), url)
+    print(url)
 
     resp = requests.request(
         method=request.method,
-        url = url,
+        url = url.replace(" ", ""),
         # url=request.url.replace(SERVICE_TYPE, "_" + SERVICE_TYPE).replace(str(SHEDDER_PORT), str(SERVICE_PORT)),
         headers={key: value for (key, value) in request.headers if key != 'Host'},
         data=request.get_data(),
@@ -214,8 +238,10 @@ def requestForwarder(requestType):
         return Response(json.dumps({"error": "Required fields not specified"}), status=400, mimetype='application/json')
     backoff = getClusterBackoff(request.headers["user-type"], request.headers["request-type"])
     if backoff > 0:
+        print("Backing off the request")
         return Response(json.dumps({"error": "Server is overloaded, please try later"}), status=429, headers={"Retry-After": backoff}, mimetype='application/json')
     else:
+        print("No backoff, forwarding the request")
         return _proxy(request)
 
 
@@ -244,6 +270,8 @@ if __name__ == '__main__':
 		SERVICE_TYPE = os.environ['serviceType']
 	if 'serviceHost' in os.environ:
 		SERVICE_HOST = os.environ['serviceHost']
+	if 'labelSelector' in os.environ:
+		LABEL_SELECTOR = os.environ['labelSelector']
 
 	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
-	app.run(host=host, port=port, debug=True)
+	app.run(host=host, port=port, debug=False, threaded=True)
