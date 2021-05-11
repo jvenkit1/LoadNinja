@@ -10,9 +10,17 @@ import string
 from healthcheck import HealthCheck, EnvironmentDump
 from prometheus_flask_exporter import PrometheusMetrics
 
+import socket
+import requests
+
 app = Flask(__name__)
 metrics = PrometheusMetrics(app)
 health = HealthCheck()
+
+metrics.info('app_info', 'Application info', version='1.0.3')
+
+SHEDDER_HOST = "0.0.0.0"
+SHEDDER_PORT = "3004"
 
 with open(r'./config.yaml') as file:
 	locationMappings = yaml.load(file, Loader=yaml.FullLoader)
@@ -43,15 +51,29 @@ app.config['MONGO_DBNAME'] = dbName
 app.config['MONGO_URI'] = 'mongodb://' + dbURL + ':' + str(dbPort) + '/'+ dbName
 
 mongo = PyMongo(app)
+mongo.db.authenticate(name='root', password='6VPFJn4kJa', source='admin')
 letters = string.ascii_lowercase
 
-@app.route('/metrics', methods=['GET'])
+@app.route('/api/_db/updateIP', methods=['GET'])
+def update_ip():
+	url = "http://" + SHEDDER_HOST + ":" + SHEDDER_PORT + "/api/shed/updatepodslist"
+	url = url.replace(' ', '')
+	print("Querying api at address ", url)
+	data = {}
+	data['ip'] = socket.gethostbyname(socket.gethostname())
+	try:
+		r = requests.post(url = url, data = data)
+	except:
+		print("Couldn't update shedder with the IP of this pod")
+	return jsonify({'result': 'Sent the IP'})
+
+@app.route('/internal/metrics', methods=['GET'])
 def get_metrics():
 	used_mem = psutil.virtual_memory().percent
 	used_cpu = psutil.cpu_percent()
 	return jsonify({'memory': used_mem, 'cpu': used_cpu})
 
-@app.route('/app/db/bulkRead', methods=['GET'])
+@app.route('/api/_db/bulkRead', methods=['GET'])
 def get_all_stars():
 	star = mongo.db.stars
 	repeat = int(request.args['repeat'])
@@ -66,7 +88,7 @@ def get_all_stars():
 	return jsonify({'result' : output})
 
 
-@app.route('/api/db/_writeName', methods=['POST'])
+@app.route('/api/_db/_writeName', methods=['POST'])
 def write_name():
 	star = mongo.db.stars
 	name = ''.join(random.choice(letters) for i in range(10))
@@ -75,7 +97,7 @@ def write_name():
 	return jsonify({'result' : 	''.join(star.find_one({"name": name}))})
 
 
-@app.route('/api/db/bulkWrite', methods=['POST'])
+@app.route('/api/_db/bulkWrite', methods=['POST'])
 def add_star():
 	star = mongo.db.stars
 	repeat = int(request.args['repeat'])
@@ -94,8 +116,11 @@ if __name__ == '__main__':
 		host = os.environ['writerHost']
 	if 'writerPort' in os.environ:
 		port = os.environ['writerPort']
-
+	if 'shedderHost' in os.environ:
+		SHEDDER_HOST = os.environ['shedderHost']
+	if 'shedderPort' in os.environ:
+		SHEDDER_PORT = os.environ['shedderPort']
 
 	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
-	app.run(host=host, port=port, debug=True, threaded=True)
+	app.run(host=host, port=port, debug=False, threaded=True)
 	# app.run(host=locationMappings['writer']['url'], port=locationMappings['writer']['port'], debug=True)

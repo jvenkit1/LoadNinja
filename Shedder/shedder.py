@@ -31,11 +31,19 @@ redisPort = 6379
 redisPassword = ''
 
 SLIDING_WINDOW_SIZE = 10
+
 SHEDDER_PORT = 3004
 SERVICE_PORT = 3000
+
 SERVICE_TYPE = "cpu"
 LABEL_SELECTOR = "cpu-cpu-service"
 SERVICE_HOST = "0.0.0.0"
+
+CPU_NODE_LIMIT = 940
+MEMORY_NODE_LIMIT = 300 
+CPU_POD_LIMIT = 200
+MEMORY_POD_LIMIT = 200
+
 
 
 def is_running():
@@ -73,8 +81,8 @@ def createPodsList():
             # "isActive": True, 
             "cpu": [],
             "memory": [],
-            "latency": [],
-            "result": []
+            # "latency": [],
+            # "result": []
         }), nx=True)
     keyList = [ key.decode('UTF-8') for key in r.scan_iter(SERVICE_TYPE + '/' + "*") ]
     return jsonify({ "written" : keyList })
@@ -94,8 +102,8 @@ def updatePodsList():
         # "isActive": True, 
         "cpu": [],
         "memory": [],
-        "latency": [],
-        "result": []
+        # "latency": [],
+        # "result": []
     }), nx=True)
     keyList = [ key.decode('UTF-8') for key in r.scan_iter(SERVICE_TYPE + '/' + "*") ]
     return jsonify({ "written" :  keyList})
@@ -138,17 +146,17 @@ def getHealthChecks():
         ipAddress = key.decode("utf-8")
         # Gets the value stored in redis for the particular key, converts it into a JSON object
         pastUsage = json.loads(r.get(ipAddress))
-        print("ipAddressFetch", ipAddress[len(SERVICE_TYPE + '/'):], pastUsage, file=sys.stdout)
+        # print("ipAddressFetch", ipAddress[len(SERVICE_TYPE + '/'):], pastUsage, file=sys.stdout)
 
         try:
             # Remove REDIS_PREFIX from key, send request to the resultant IP to fetch the health of the server
             endPoint = "http://" + ipAddress[len(SERVICE_TYPE + '/'):]  + '/internal/metrics'
             endPoint = endPoint.replace(" ", "")
-            print("Reaching out to " + endPoint)
+            # print("Reaching out to " + endPoint)
             usageUpdateResponse = requests.get(endPoint, timeout=1).content
-            print("Metadata", usageUpdateResponse)
+            # print("Metadata", usageUpdateResponse)
             usageUpdate = dict(json.loads(usageUpdateResponse))
-            print("New statistics", usageUpdate)
+            # print("New statistics", usageUpdate)
 
             for metric in usageUpdate:
                 if metric in pastUsage and len(pastUsage[metric]) > SLIDING_WINDOW_SIZE:
@@ -176,7 +184,6 @@ def getHealthChecks():
 # Respnd with corresponding maximum backoff
 def getClusterBackoff(userType, requestType):
     r = redis.Redis(host=redisHost, port=redisPort, password=redisPassword, db=0)
-    
     backoffValue = 0
     for key in r.scan_iter(SERVICE_TYPE + '/' + "*"):
         # Key is returned in bytes, converting it into a string
@@ -186,8 +193,18 @@ def getClusterBackoff(userType, requestType):
         
         for key in pastUsage:
             # Calculating the average of the values, if no values exist return 0
-            # print(pastUsage[key], key)
             averageMetric = sum(pastUsage[key])/len(pastUsage[key]) if len(pastUsage[key]) > 0 else 0
+
+            # The utilization given by psutils is a percentage of the entire node, we have to scale it to the limit of pod
+            if key == 'cpu':
+                adjustedAverage = (100/15) * (averageMetric - 5)
+            elif key == 'memory':
+                adjustedAverage = (100/50) * (averageMetric - 20)
+            else:
+                adjustedAverage = averageMetric
+
+
+            print("Adjusted averaging for ", key, averageMetric, adjustedAverage)
 
             if key not in backoff.BACKOFF_CONFIG[userType][requestType]:
                 continue
@@ -195,9 +212,12 @@ def getClusterBackoff(userType, requestType):
             thresholdValues = backoff.BACKOFF_CONFIG[userType][requestType][key]
             index = 0
             while index < len(thresholdValues[0]):
-                if index == len(thresholdValues[0]) - 1:
+                if index == 0 and adjustedAverage < thresholdValues[0][index]:
                     backoffValue = max(backoffValue, thresholdValues[1][index])
-                elif thresholdValues[0][index] <= averageMetric < thresholdValues[0][index+1]:
+                    break
+                elif index == len(thresholdValues[0]) - 1:
+                    backoffValue = max(backoffValue, thresholdValues[1][index])
+                elif thresholdValues[0][index] <= adjustedAverage < thresholdValues[0][index+1]:
                     backoffValue = max(backoffValue, thresholdValues[1][index])
                     break
                 index += 1
@@ -213,7 +233,7 @@ def _proxy(*args, **kwargs):
     print("Path - {} \n FullPath - {}\n URL - {}\n BaseURL - {}\n ScriptRoot - {}\n URLRoot-{}\n".format(request.path, request.full_path, request.url, request.base_url, request.script_root, request.url_root))
 
     url = "http://" + SERVICE_HOST + ":" + str(SERVICE_PORT) + request.full_path.replace(SERVICE_TYPE, "_" + SERVICE_TYPE)
-    print(url)
+    print(url.replace(" ", ""), file=sys.stdout)
 
     resp = requests.request(
         method=request.method,
@@ -238,13 +258,36 @@ def requestForwarder(requestType):
         return Response(json.dumps({"error": "Required fields not specified"}), status=400, mimetype='application/json')
     backoff = getClusterBackoff(request.headers["user-type"], request.headers["request-type"])
     if backoff > 0:
-        print("Backing off the request")
+        print("Backing off the request: ", backoff)
         return Response(json.dumps({"error": "Server is overloaded, please try later"}), status=429, headers={"Retry-After": backoff}, mimetype='application/json')
     else:
-        print("No backoff, forwarding the request")
+        print("No backoff, forwarding the request", file=sys.stdout)
         return _proxy(request)
 
 
+@app.route('/api/db/<requestType>', methods=['GET', 'POST'])
+def requestForwarderDB(requestType):
+    if "user-type" not in request.headers or "request-type" not in request.headers:
+        return Response(json.dumps({"error": "Required fields not specified"}), status=400, mimetype='application/json')
+    backoff = getClusterBackoff(request.headers["user-type"], request.headers["request-type"])
+    if backoff > 0:
+        print("Backing off the request: ", backoff)
+        return Response(json.dumps({"error": "Server is overloaded, please try later"}), status=429, headers={"Retry-After": backoff}, mimetype='application/json')
+    else:
+        print("No backoff, forwarding the request", file=sys.stdout)
+        return _proxy(request)
+
+@app.route('/api/memory/<requestType>', methods=['GET', 'POST'])
+def requestForwarderMemory(requestType):
+    if "user-type" not in request.headers or "request-type" not in request.headers:
+        return Response(json.dumps({"error": "Required fields not specified"}), status=400, mimetype='application/json')
+    backoff = getClusterBackoff(request.headers["user-type"], request.headers["request-type"])
+    if backoff > 0:
+        print("Backing off the request: ", backoff)
+        return Response(json.dumps({"error": "Server is overloaded, please try later"}), status=429, headers={"Retry-After": backoff}, mimetype='application/json')
+    else:
+        print("No backoff, forwarding the request", file=sys.stdout)
+        return _proxy(request)
 
 
 
@@ -272,6 +315,11 @@ if __name__ == '__main__':
 		SERVICE_HOST = os.environ['serviceHost']
 	if 'labelSelector' in os.environ:
 		LABEL_SELECTOR = os.environ['labelSelector']
+	if 'cpuPodLimit' in os.environ:
+		CPU_POD_LIMIT = os.environ['cpuPodLimit']
+	if 'memoryPodLimit' in os.environ:
+		MEMORY_POD_LIMIT = os.environ['memoryPodLimit'] 
+
 
 	app.add_url_rule("/health", "healthcheck", view_func = lambda: health.run())
 	app.run(host=host, port=port, debug=False, threaded=True)
